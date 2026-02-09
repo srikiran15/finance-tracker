@@ -6,78 +6,81 @@ import plotly.express as px
 
 st.set_page_config(layout="wide")
 
-FILE="data.csv"
+FILE = "data.csv"
 
+# ---------- INIT ----------
 if not os.path.exists(FILE):
     pd.DataFrame(columns=["date","type","category","description","amount"]).to_csv(FILE,index=False)
 
-df=pd.read_csv(FILE)
-df["date"]=pd.to_datetime(df["date"],errors="coerce")
+df = pd.read_csv(FILE)
+df["date"] = pd.to_datetime(df["date"], errors="coerce")
+df = df.dropna(subset=["date"])
 
-page=st.sidebar.radio("Menu",["➕ Add","📊 Report","🗑 Delete"])
+# ---------- SIDEBAR ----------
+page = st.sidebar.radio("Menu",["➕ Add","📊 Report","🗑 Delete"])
 
-# ---------------- ADD ----------------
+# ---------- ADD ----------
 if page=="➕ Add":
 
     st.title("➕ Add Entry")
 
-    with st.form("add",clear_on_submit=True):
+    with st.form("add", clear_on_submit=True):
 
-        d=st.date_input("Date",date.today())
-        t=st.selectbox("Type",["Income","Expense"])
-        c=st.selectbox("Category",["Salary","Food","Travel","Shopping","Bills","Other"])
-        desc=st.text_input("Description")
-        a=st.number_input("Amount",min_value=0.0)
+        d = st.date_input("Date", date.today())
+        t = st.selectbox("Type", ["Income","Expense"])
+        c = st.selectbox("Category", ["Salary","Food","Travel","Shopping","Bills","Other"])
+        desc = st.text_input("Description")
+        a = st.number_input("Amount", min_value=0.0)
 
         if st.form_submit_button("Save"):
-            df.loc[len(df)]=[d,t,c,desc,a]
+            df.loc[len(df)] = [d,t,c,desc,a]
             df.to_csv(FILE,index=False)
-            st.success("Saved")
+            st.success("Saved!")
 
-# ---------------- REPORT ----------------
+# ---------- REPORT ----------
 elif page=="📊 Report":
 
     st.title("📊 Monthly Report")
 
-    df["month"]=df["date"].dt.to_period("M").astype(str)
+    df["month"] = df["date"].dt.to_period("M").astype(str)
 
-    msel=st.selectbox("Month",sorted(df["month"].dropna().unique(),reverse=True))
-    m=df[df["month"]==msel]
+    month = st.selectbox("Select Month", sorted(df["month"].unique(), reverse=True))
+    m = df[df["month"] == month]
 
-    minc=m[m.type=="Income"]["amount"].sum()
-    mexp=m[m.type=="Expense"]["amount"].sum()
+    minc = m[m.type=="Income"]["amount"].sum()
+    mexp = m[m.type=="Expense"]["amount"].sum()
 
-    tinc=df[df.type=="Income"]["amount"].sum()
-    texp=df[df.type=="Expense"]["amount"].sum()
+    tinc = df[df.type=="Income"]["amount"].sum()
+    texp = df[df.type=="Expense"]["amount"].sum()
 
-    bal=tinc-texp
+    bal = tinc - texp
 
     st.markdown(f"### 🟢 Month Income: +₹{minc}")
     st.markdown(f"### 🔴 Month Expense: -₹{mexp}")
     st.markdown("---")
     st.markdown(f"## 💼 Overall Balance: ₹{bal}")
 
-    show=m.copy()
-    show["Amount"]=show.apply(lambda r:f"+{r.amount}" if r.type=="Income" else f"-{r.amount}",axis=1)
+    show = m.copy()
+    show["Amount"] = show.apply(lambda r: f"+{r.amount}" if r.type=="Income" else f"-{r.amount}", axis=1)
 
-    st.dataframe(show[["date","type","category","description","Amount"]],use_container_width=True)
+    st.dataframe(show[["date","type","category","description","Amount"]], use_container_width=True)
 
     if not m.empty:
-        fig=px.pie(m[m.type=="Expense"],names="category",values="amount")
-        st.plotly_chart(fig,use_container_width=True)
+        fig = px.pie(m[m.type=="Expense"], names="category", values="amount")
+        st.plotly_chart(fig, use_container_width=True)
 
-# ---------------- DELETE ----------------
+# ---------- DELETE ----------
 else:
 
     st.title("🗑 Delete Entry")
 
-    df["label"]=df.apply(lambda r:f"{r.date.date()} | {r.description} | ₹{r.amount}",axis=1)
+    df["label"] = df.apply(lambda r: f"{str(r.date)[:10]} | {r.description} | ₹{r.amount}", axis=1)
 
-    choice=st.selectbox("Select entry",df["label"])
+    pick = st.selectbox("Select entry", df["label"])
 
     if st.button("Delete"):
-        df=df[df["label"]!=choice]
-        df.drop(columns="label",inplace=True)
+        df = df[df["label"] != pick]
+        df.drop(columns="label", inplace=True)
         df.to_csv(FILE,index=False)
         st.success("Deleted")
         st.experimental_rerun()
