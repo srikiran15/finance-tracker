@@ -1,86 +1,56 @@
-import streamlit as st
+ import streamlit as st
 import pandas as pd
-import os
 from datetime import date
+import os
 import plotly.express as px
 
-st.set_page_config(layout="wide")
+st.set_page_config(page_title="Finance Tracker")
 
-FILE = "data.csv"
+DATA_FILE = "data.csv"
 
-# ---------- INIT ----------
-if not os.path.exists(FILE):
-    pd.DataFrame(columns=["date","type","category","description","amount"]).to_csv(FILE,index=False)
+if not os.path.exists(DATA_FILE):
+    df = pd.DataFrame(columns=["type","amount","category","note","date"])
+    df.to_csv(DATA_FILE,index=False)
 
-df = pd.read_csv(FILE)
-df["date"] = pd.to_datetime(df["date"], errors="coerce")
-df = df.dropna(subset=["date"])
+df = pd.read_csv(DATA_FILE)
 
-# ---------- SIDEBAR ----------
-page = st.sidebar.radio("Menu",["➕ Add","📊 Report","🗑 Delete"])
+st.title("💰 Personal Finance Tracker")
 
-# ---------- ADD ----------
-if page=="➕ Add":
+tab1, tab2 = st.tabs(["Add Entry","Monthly Report"])
 
-    st.title("➕ Add Entry")
+with tab1:
+    t = st.radio("Type",["Income","Expense"])
+    amount = st.number_input("Amount",min_value=0.0)
+    category = st.selectbox("Category",["Salary","Food","Travel","Shopping","Bills","Other"])
+    note = st.text_input("Note")
+    d = st.date_input("Date",date.today())
 
-    with st.form("add", clear_on_submit=True):
+    if st.button("Save"):
+        new = pd.DataFrame([[t,amount,category,note,str(d)]],
+        columns=df.columns)
+        df = pd.concat([df,new])
+        df.to_csv(DATA_FILE,index=False)
+        st.success("Saved")
 
-        d = st.date_input("Date", date.today())
-        t = st.selectbox("Type", ["Income","Expense"])
-        c = st.selectbox("Category", ["Salary","Food","Travel","Shopping","Bills","Other"])
-        desc = st.text_input("Description")
-        a = st.number_input("Amount", min_value=0.0)
+with tab2:
+    if not df.empty:
+        df["date"]=pd.to_datetime(df["date"])
+        month=st.selectbox("Month",df["date"].dt.strftime("%Y-%m").unique())
 
-        if st.form_submit_button("Save"):
-            df.loc[len(df)] = [d,t,c,desc,a]
-            df.to_csv(FILE,index=False)
-            st.success("Saved!")
+        m=df[df["date"].dt.strftime("%Y-%m")==month]
 
-# ---------- REPORT ----------
-elif page=="📊 Report":
+        income=m[m["type"]=="Income"]["amount"].sum()
+        expense=m[m["type"]=="Expense"]["amount"].sum()
 
-    st.title("📊 Monthly Report")
+        st.metric("Income",income)
+        st.metric("Expense",expense)
+        st.metric("Balance",income-expense)
 
-    df["month"] = df["date"].dt.to_period("M").astype(str)
+        st.dataframe(m)
 
-    month = st.selectbox("Select Month", sorted(df["month"].unique(), reverse=True))
-    m = df[df["month"] == month]
-
-    minc = m[m.type=="Income"]["amount"].sum()
-    mexp = m[m.type=="Expense"]["amount"].sum()
-
-    tinc = df[df.type=="Income"]["amount"].sum()
-    texp = df[df.type=="Expense"]["amount"].sum()
-
-    bal = tinc - texp
-
-    st.markdown(f"### 🟢 Month Income: +₹{minc}")
-    st.markdown(f"### 🔴 Month Expense: -₹{mexp}")
-    st.markdown("---")
-    st.markdown(f"## 💼 Overall Balance: ₹{bal}")
-
-    show = m.copy()
-    show["Amount"] = show.apply(lambda r: f"+{r.amount}" if r.type=="Income" else f"-{r.amount}", axis=1)
-
-    st.dataframe(show[["date","type","category","description","Amount"]], use_container_width=True)
-
-    if not m.empty:
-        fig = px.pie(m[m.type=="Expense"], names="category", values="amount")
-        st.plotly_chart(fig, use_container_width=True)
-
-# ---------- DELETE ----------
-else:
-
-    st.title("🗑 Delete Entry")
-
-    df["label"] = df.apply(lambda r: f"{str(r.date)[:10]} | {r.description} | ₹{r.amount}", axis=1)
-
-    pick = st.selectbox("Select entry", df["label"])
-
-    if st.button("Delete"):
-        df = df[df["label"] != pick]
-        df.drop(columns="label", inplace=True)
-        df.to_csv(FILE,index=False)
-        st.success("Deleted")
-        st.experimental_rerun()
+        exp=m[m["type"]=="Expense"]
+        if not exp.empty:
+            fig=px.pie(exp,values="amount",names="category")
+            st.plotly_chart(fig)
+    else:
+        st.info("No data yet") 
