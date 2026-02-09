@@ -53,4 +53,4 @@ with tab2:
             fig=px.pie(exp,values="amount",names="category")
             st.plotly_chart(fig)
     else:
-        st.info("No data yet") 
+        st.info("No data yet")
