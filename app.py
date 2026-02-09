@@ -13,8 +13,14 @@ if not os.path.exists(DATA_FILE):
     df_init.to_csv(DATA_FILE,index=False)
 
 df = pd.read_csv(DATA_FILE)
-
 df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0)
+
+# ---------- ROW COLORING ----------
+def color_rows(row):
+    if row["type"] == "Income":
+        return ["color: green"] * len(row)
+    else:
+        return ["color: red"] * len(row)
 
 st.title("💰 Personal Finance Tracker")
 
@@ -68,7 +74,8 @@ with tab2:
             axis=1
         )
 
-        st.dataframe(show[["date","type","category","note","Signed Amount"]],use_container_width=True)
+        styled = show[["date","type","category","note","Signed Amount"]].style.apply(color_rows, axis=1)
+        st.write(styled)
 
         exp = m[m["type"]=="Expense"]
 
@@ -119,7 +126,8 @@ with tab3:
             st.warning("Deleted")
             st.rerun()
 
-        st.dataframe(df.drop(columns=["id"]),use_container_width=True)
+        styled2 = df.drop(columns=["id"]).style.apply(color_rows, axis=1)
+        st.write(styled2)
 
     else:
         st.info("No records yet")
