@@ -14,7 +14,6 @@ if not os.path.exists(DATA_FILE):
 
 df = pd.read_csv(DATA_FILE)
 
-# Force numeric
 df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0)
 
 st.title("💰 Personal Finance Tracker")
@@ -42,20 +41,34 @@ with tab1:
 # ================= MONTHLY REPORT =================
 with tab2:
     if not df.empty:
-        df["date"] = pd.to_datetime(df["date"])
 
-        month = st.selectbox("Month",df["date"].dt.strftime("%Y-%m").unique())
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+
+        month = st.selectbox("Month",df["date"].dt.strftime("%Y-%m").dropna().unique())
 
         m = df[df["date"].dt.strftime("%Y-%m")==month]
 
         income = m[m["type"]=="Income"]["amount"].sum()
         expense = m[m["type"]=="Expense"]["amount"].sum()
 
-        st.metric("Income", income)
-        st.metric("Expense", expense)
-        st.metric("Balance", income-expense)
+        total_income = df[df["type"]=="Income"]["amount"].sum()
+        total_expense = df[df["type"]=="Expense"]["amount"].sum()
 
-        st.dataframe(m)
+        overall_balance = total_income-total_expense
+
+        col1,col2,col3 = st.columns(3)
+
+        col1.markdown(f"### 🟢 Income\n## +₹{income}")
+        col2.markdown(f"### 🔴 Expense\n## -₹{expense}")
+        col3.markdown(f"### 💼 Overall Balance\n## ₹{overall_balance}")
+
+        show = m.copy()
+        show["Signed Amount"] = show.apply(
+            lambda r: f"+{r.amount}" if r["type"]=="Income" else f"-{r.amount}",
+            axis=1
+        )
+
+        st.dataframe(show[["date","type","category","note","Signed Amount"]],use_container_width=True)
 
         exp = m[m["type"]=="Expense"]
 
@@ -83,7 +96,8 @@ with tab3:
 
         eamount = st.number_input("Edit Amount", value=float(row["amount"]))
 
-        ecat = st.selectbox("Edit Category",["Salary","Food","Travel","Shopping","Bills","Other"])
+        ecat = st.selectbox("Edit Category",["Salary","Food","Travel","Shopping","Bills","Other"],
+                            index=["Salary","Food","Travel","Shopping","Bills","Other"].index(row["category"]))
 
         enote = st.text_input("Edit Note", value=row["note"])
 
@@ -93,19 +107,19 @@ with tab3:
 
         if col1.button("Update"):
             df.loc[selected] = [etype,eamount,ecat,enote,str(edate),selected]
-            df.drop(columns=["id"], inplace=True, errors="ignore")
+            df.drop(columns=["id"], inplace=True)
             df.to_csv(DATA_FILE,index=False)
             st.success("Updated")
             st.rerun()
 
         if col2.button("Delete"):
             df = df.drop(selected)
-            df.drop(columns=["id"], inplace=True, errors="ignore")
+            df.drop(columns=["id"], inplace=True)
             df.to_csv(DATA_FILE,index=False)
             st.warning("Deleted")
             st.rerun()
 
-        st.dataframe(df.drop(columns=["id"], errors="ignore"))
+        st.dataframe(df.drop(columns=["id"]),use_container_width=True)
 
     else:
         st.info("No records yet")
