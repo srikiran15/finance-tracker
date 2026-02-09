@@ -14,7 +14,6 @@ if not os.path.exists(DATA_FILE):
 
 df = pd.read_csv(DATA_FILE)
 
-# Force numeric
 df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0)
 
 st.title("💰 Personal Finance Tracker")
@@ -24,7 +23,6 @@ tab1, tab2, tab3 = st.tabs(["➕ Add Entry","📊 Monthly Report","🛠 Manage E
 # ================= ADD ENTRY =================
 with tab1:
     with st.form("add_form", clear_on_submit=True):
-
         t = st.radio("Type",["Income","Expense"])
         amount = st.number_input("Amount",min_value=0.0)
         category = st.selectbox("Category",["Salary","Food","Travel","Shopping","Bills","Other"])
@@ -51,11 +49,19 @@ with tab2:
         income = m[m["type"]=="Income"]["amount"].sum()
         expense = m[m["type"]=="Expense"]["amount"].sum()
 
-        st.metric("Income", income)
-        st.metric("Expense", expense)
-        st.metric("Balance", income-expense)
+        st.markdown(f"### 🟢 Income: +₹{income}")
+        st.markdown(f"### 🔴 Expense: -₹{expense}")
+        st.markdown(f"## 💼 Balance: ₹{income-expense}")
 
-        st.dataframe(m)
+        m["Signed Amount"] = m.apply(
+            lambda x: f"+{x['amount']}" if x["type"]=="Income" else f"-{x['amount']}", axis=1)
+
+        styled = m.style.apply(
+            lambda r: ["color:green" if r.type=="Income" else "color:red"]*len(r),
+            axis=1
+        )
+
+        st.dataframe(styled)
 
         exp = m[m["type"]=="Expense"]
 
@@ -105,7 +111,16 @@ with tab3:
             st.warning("Deleted")
             st.rerun()
 
-        st.dataframe(df.drop(columns=["id"], errors="ignore"))
+        display_df = df.copy()
+        display_df["Signed"] = display_df.apply(
+            lambda x: f"+{x['amount']}" if x["type"]=="Income" else f"-{x['amount']}", axis=1)
+
+        styled2 = display_df.style.apply(
+            lambda r: ["color:green" if r.type=="Income" else "color:red"]*len(r),
+            axis=1
+        )
+
+        st.dataframe(styled2.drop(columns=["id"], errors="ignore"))
 
     else:
         st.info("No records yet")
