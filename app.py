@@ -1,126 +1,132 @@
 import streamlit as st
 import pandas as pd
-from datetime import date
 import os
-import plotly.express as px
+from datetime import date
+import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="Finance Tracker")
+FILE = "data.csv"
+PIN = "1234"
 
-DATA_FILE = "data.csv"
+st.set_page_config(page_title="Finance Tracker", layout="wide")
 
-if not os.path.exists(DATA_FILE):
-    df_init = pd.DataFrame(columns=["type","amount","category","note","date"])
-    df_init.to_csv(DATA_FILE,index=False)
+# ---------- PIN LOCK ----------
+if "auth" not in st.session_state:
+    st.session_state.auth = False
 
-df = pd.read_csv(DATA_FILE)
+if not st.session_state.auth:
+    p = st.text_input("Enter 4 Digit PIN", type="password")
+    if p == PIN:
+        st.session_state.auth = True
+        st.rerun()
+    st.stop()
 
-df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0)
+# ---------- LOAD DATA ----------
+if os.path.exists(FILE):
+    df = pd.read_csv(FILE)
+else:
+    df = pd.DataFrame(columns=["date","type","category","amount","note"])
 
-st.title("💰 Personal Finance Tracker")
+df["date"] = pd.to_datetime(df["date"])
 
-tab1, tab2, tab3 = st.tabs(["➕ Add Entry","📊 Monthly Report","🛠 Manage Entries"])
+# ---------- SIDEBAR ----------
+page = st.sidebar.radio("Menu",["Add Entry","Dashboard","Edit/Delete"])
 
-# ================= ADD ENTRY =================
-with tab1:
-    with st.form("add_form", clear_on_submit=True):
-        t = st.radio("Type",["Income","Expense"])
-        amount = st.number_input("Amount",min_value=0.0)
-        category = st.selectbox("Category",["Salary","Food","Travel","Shopping","Bills","Other"])
-        note = st.text_input("Note")
-        d = st.date_input("Date",date.today())
+# ---------- ADD ENTRY ----------
+if page=="Add Entry":
 
-        submit = st.form_submit_button("Save")
+    st.header("➕ Add Entry")
 
-        if submit:
-            new = pd.DataFrame([[t,amount,category,note,str(d)]],columns=df.columns)
-            df2 = pd.concat([df,new],ignore_index=True)
-            df2.to_csv(DATA_FILE,index=False)
-            st.success("Saved")
+    d = st.date_input("Date",date.today())
+    t = st.selectbox("Type",["Income","Expense"])
+    c = st.selectbox("Category",["Salary","Food","Travel","Shopping","Bills","Other"])
+    a = st.number_input("Amount",min_value=0.0)
+    n = st.text_input("Note")
 
-# ================= MONTHLY REPORT =================
-with tab2:
-    if not df.empty:
-        df["date"] = pd.to_datetime(df["date"])
+    if st.button("Submit"):
 
-        month = st.selectbox("Month",df["date"].dt.strftime("%Y-%m").unique())
+        new = pd.DataFrame([[d,t,c,a,n]],columns=df.columns)
+        df = pd.concat([df,new],ignore_index=True)
+        df.to_csv(FILE,index=False)
 
-        m = df[df["date"].dt.strftime("%Y-%m")==month]
+        st.success("Saved!")
+        st.rerun()
 
-        income = m[m["type"]=="Income"]["amount"].sum()
-        expense = m[m["type"]=="Expense"]["amount"].sum()
+# ---------- DASHBOARD ----------
+elif page=="Dashboard":
 
-        st.markdown(f"### 🟢 Income: +₹{income}")
-        st.markdown(f"### 🔴 Expense: -₹{expense}")
-        st.markdown(f"## 💼 Balance: ₹{income-expense}")
+    st.header("📊 Dashboard")
 
-        m["Signed Amount"] = m.apply(
-            lambda x: f"+{x['amount']}" if x["type"]=="Income" else f"-{x['amount']}", axis=1)
+    month = st.selectbox("Select Month",sorted(df["date"].dt.to_period("M").astype(str).unique()))
 
-        styled = m.style.apply(
-            lambda r: ["color:green" if r.type=="Income" else "color:red"]*len(r),
-            axis=1
-        )
+    m = df[df["date"].dt.to_period("M").astype(str)==month]
 
-        st.dataframe(styled)
+    month_income = m[m["type"]=="Income"]["amount"].sum()
+    month_expense = m[m["type"]=="Expense"]["amount"].sum()
 
-        exp = m[m["type"]=="Expense"]
+    total_income = df[df["type"]=="Income"]["amount"].sum()
+    total_expense = df[df["type"]=="Expense"]["amount"].sum()
 
-        if len(exp) > 0:
-            fig = px.pie(exp, values="amount", names="category")
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No expenses for this month")
+    overall = total_income-total_expense
 
-    else:
-        st.info("No data yet")
+    st.markdown(f"### 🟢 Month Income: +₹{month_income}")
+    st.markdown(f"### 🔴 Month Expense: -₹{month_expense}")
+    st.markdown("---")
+    st.markdown(f"## 💼 Overall Balance: ₹{overall}")
 
-# ================= MANAGE ENTRIES =================
-with tab3:
-    if not df.empty:
+    # ---------- DAILY BALANCE ----------
+    ddf=df.sort_values("date")
+    ddf["signed"]=ddf.apply(lambda x: x["amount"] if x["type"]=="Income" else -x["amount"],axis=1)
+    ddf["balance"]=ddf["signed"].cumsum()
 
-        df["id"] = df.index
+    st.subheader("📈 Balance Over Time")
+    st.line_chart(ddf.set_index("date")["balance"])
 
-        selected = st.selectbox("Select Entry", df["id"])
+    # ---------- PIE CHARTS ----------
+    st.subheader("🧁 Category Pie")
 
-        row = df.loc[selected]
+    fig,ax=plt.subplots(1,2)
 
-        etype = st.selectbox("Edit Type",["Income","Expense"],
-                             index=0 if row["type"]=="Income" else 1)
+    inc=m[m["type"]=="Income"].groupby("category")["amount"].sum()
+    exp=m[m["type"]=="Expense"].groupby("category")["amount"].sum()
 
-        eamount = st.number_input("Edit Amount", value=float(row["amount"]))
+    if not inc.empty:
+        ax[0].pie(inc,labels=inc.index,autopct="%1.0f%%")
+        ax[0].set_title("Income")
 
-        ecat = st.selectbox("Edit Category",["Salary","Food","Travel","Shopping","Bills","Other"])
+    if not exp.empty:
+        ax[1].pie(exp,labels=exp.index,autopct="%1.0f%%")
+        ax[1].set_title("Expense")
 
-        enote = st.text_input("Edit Note", value=row["note"])
+    st.pyplot(fig)
 
-        edate = st.date_input("Edit Date", pd.to_datetime(row["date"]))
+    # ---------- CATEGORY SUMMARY ----------
+    st.subheader("📋 Monthly Category Summary")
+    st.dataframe(exp.reset_index())
 
-        col1, col2 = st.columns(2)
+    # ---------- DOWNLOAD ----------
+    st.download_button("⬇ Download CSV",df.to_csv(index=False),"finance.csv")
 
-        if col1.button("Update"):
-            df.loc[selected] = [etype,eamount,ecat,enote,str(edate),selected]
-            df.drop(columns=["id"], inplace=True, errors="ignore")
-            df.to_csv(DATA_FILE,index=False)
-            st.success("Updated")
-            st.rerun()
+# ---------- EDIT DELETE ----------
+else:
 
-        if col2.button("Delete"):
-            df = df.drop(selected)
-            df.drop(columns=["id"], inplace=True, errors="ignore")
-            df.to_csv(DATA_FILE,index=False)
-            st.warning("Deleted")
-            st.rerun()
+    st.header("✏ Edit / Delete")
 
-        display_df = df.copy()
-        display_df["Signed"] = display_df.apply(
-            lambda x: f"+{x['amount']}" if x["type"]=="Income" else f"-{x['amount']}", axis=1)
+    for i,row in df.iterrows():
 
-        styled2 = display_df.style.apply(
-            lambda r: ["color:green" if r.type=="Income" else "color:red"]*len(r),
-            axis=1
-        )
+        with st.expander(f"{row['date'].date()} {row['category']} ₹{row['amount']}"):
 
-        st.dataframe(styled2.drop(columns=["id"], errors="ignore"))
+            d=st.date_input("Date",row["date"],key=f"d{i}")
+            t=st.selectbox("Type",["Income","Expense"],index=0 if row["type"]=="Income" else 1,key=f"t{i}")
+            c=st.selectbox("Category",["Salary","Food","Travel","Shopping","Bills","Other"],key=f"c{i}")
+            a=st.number_input("Amount",value=row["amount"],key=f"a{i}")
+            n=st.text_input("Note",row["note"],key=f"n{i}")
 
-    else:
-        st.info("No records yet")
+            if st.button("Update",key=f"u{i}"):
+                df.loc[i]=[d,t,c,a,n]
+                df.to_csv(FILE,index=False)
+                st.rerun()
+
+            if st.button("Delete",key=f"x{i}"):
+                df=df.drop(i)
+                df.to_csv(FILE,index=False)
+                st.rerun()
