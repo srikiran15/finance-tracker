@@ -8,13 +8,14 @@ st.set_page_config(page_title="Finance Tracker")
 
 DATA_FILE = "data.csv"
 
-# Create CSV if not exists
 if not os.path.exists(DATA_FILE):
     df_init = pd.DataFrame(columns=["type","amount","category","note","date"])
     df_init.to_csv(DATA_FILE,index=False)
 
-# Always reload data
 df = pd.read_csv(DATA_FILE)
+
+# Force numeric
+df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0)
 
 st.title("💰 Personal Finance Tracker")
 
@@ -22,25 +23,28 @@ tab1, tab2, tab3 = st.tabs(["➕ Add Entry","📊 Monthly Report","🛠 Manage E
 
 # ================= ADD ENTRY =================
 with tab1:
-    t = st.radio("Type",["Income","Expense"], key="add_type")
-    amount = st.number_input("Amount",min_value=0.0, key="add_amount")
-    category = st.selectbox("Category",["Salary","Food","Travel","Shopping","Bills","Other"], key="add_cat")
-    note = st.text_input("Note", key="add_note")
-    d = st.date_input("Date",date.today(), key="add_date")
+    with st.form("add_form", clear_on_submit=True):
 
-    if st.button("Save", key="add_save"):
-        new = pd.DataFrame([[t,amount,category,note,str(d)]],columns=df.columns)
-        df = pd.concat([df,new],ignore_index=True)
-        df.to_csv(DATA_FILE,index=False)
-        st.success("Saved")
-        st.rerun()
+        t = st.radio("Type",["Income","Expense"])
+        amount = st.number_input("Amount",min_value=0.0)
+        category = st.selectbox("Category",["Salary","Food","Travel","Shopping","Bills","Other"])
+        note = st.text_input("Note")
+        d = st.date_input("Date",date.today())
+
+        submit = st.form_submit_button("Save")
+
+        if submit:
+            new = pd.DataFrame([[t,amount,category,note,str(d)]],columns=df.columns)
+            df2 = pd.concat([df,new],ignore_index=True)
+            df2.to_csv(DATA_FILE,index=False)
+            st.success("Saved")
 
 # ================= MONTHLY REPORT =================
 with tab2:
     if not df.empty:
         df["date"] = pd.to_datetime(df["date"])
 
-        month = st.selectbox("Month",df["date"].dt.strftime("%Y-%m").unique(), key="rep_month")
+        month = st.selectbox("Month",df["date"].dt.strftime("%Y-%m").unique())
 
         m = df[df["date"].dt.strftime("%Y-%m")==month]
 
@@ -54,9 +58,12 @@ with tab2:
         st.dataframe(m)
 
         exp = m[m["type"]=="Expense"]
-        if not exp.empty:
+
+        if len(exp) > 0:
             fig = px.pie(exp, values="amount", names="category")
-            st.plotly_chart(fig)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No expenses for this month")
 
     else:
         st.info("No data yet")
@@ -67,32 +74,31 @@ with tab3:
 
         df["id"] = df.index
 
-        selected = st.selectbox("Select Entry", df["id"], key="edit_id")
+        selected = st.selectbox("Select Entry", df["id"])
 
         row = df.loc[selected]
 
         etype = st.selectbox("Edit Type",["Income","Expense"],
-                             index=0 if row["type"]=="Income" else 1,
-                             key="edit_type")
+                             index=0 if row["type"]=="Income" else 1)
 
-        eamount = st.number_input("Edit Amount", value=float(row["amount"]), key="edit_amount")
+        eamount = st.number_input("Edit Amount", value=float(row["amount"]))
 
-        ecat = st.selectbox("Edit Category",["Salary","Food","Travel","Shopping","Bills","Other"], key="edit_cat")
+        ecat = st.selectbox("Edit Category",["Salary","Food","Travel","Shopping","Bills","Other"])
 
-        enote = st.text_input("Edit Note", value=row["note"], key="edit_note")
+        enote = st.text_input("Edit Note", value=row["note"])
 
-        edate = st.date_input("Edit Date", pd.to_datetime(row["date"]), key="edit_date")
+        edate = st.date_input("Edit Date", pd.to_datetime(row["date"]))
 
         col1, col2 = st.columns(2)
 
-        if col1.button("Update", key="update_btn"):
+        if col1.button("Update"):
             df.loc[selected] = [etype,eamount,ecat,enote,str(edate),selected]
             df.drop(columns=["id"], inplace=True, errors="ignore")
             df.to_csv(DATA_FILE,index=False)
             st.success("Updated")
             st.rerun()
 
-        if col2.button("Delete", key="delete_btn"):
+        if col2.button("Delete"):
             df = df.drop(selected)
             df.drop(columns=["id"], inplace=True, errors="ignore")
             df.to_csv(DATA_FILE,index=False)
