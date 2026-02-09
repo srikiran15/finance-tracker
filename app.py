@@ -14,7 +14,7 @@ if not os.path.exists(FILE):
     df.to_csv(FILE,index=False)
 
 df = pd.read_csv(FILE)
-df["date"] = pd.to_datetime(df["date"])
+df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
 # ---------------- SIDEBAR ----------------
 page = st.sidebar.radio("Menu",["➕ Add Entry","📊 Monthly Report","🗂 Edit / Delete"])
