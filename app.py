@@ -24,7 +24,9 @@ with tab1:
 
     t = st.radio("Type",["Income","Expense"])
     amount = st.number_input("Amount",min_value=0.0)
-    category = st.selectbox("Category",["Salary","Food","Travel","Shopping","Bills","Other"])
+
+    category = st.selectbox("Category",["Salary","Food","Travel","Shopping","Bills","Other"], key="add_cat")
+
     note = st.text_input("Note")
     d = st.date_input("Date",date.today())
 
@@ -71,7 +73,9 @@ with tab3:
 
         etype = st.selectbox("Type",["Income","Expense"],index=0 if row["type"]=="Income" else 1)
         eamount = st.number_input("Amount",value=float(row["amount"]))
-        ecat = st.selectbox("Category",["Salary","Food","Travel","Shopping","Bills","Other"])
+
+        ecat = st.selectbox("Category",["Salary","Food","Travel","Shopping","Bills","Other"], key="edit_cat")
+
         enote = st.text_input("Note",value=row["note"])
         edate = st.date_input("Date",pd.to_datetime(row["date"]))
 
